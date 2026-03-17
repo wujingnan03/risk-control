@@ -49,7 +49,7 @@ description: >
 ```
 1. queryUserInfoByUid(arg0=uid)                              → 用户基本信息+注册IP
 2. queryLoginDeviceList(arg0=uid, arg1="last_360")           → 设备列表（一年历史）
-3. queryLoginLogList(arg0=uid, arg1=90, arg2=100)            → 登录日志（90天，上限100条）
+3. queryLoginLogList(arg0=uid, arg1=365, arg2=150)           → 登录日志（365天，上限150条）
 4. 提取登录日志中不重复IP + 注册IP(createdIp)
 5. 对每个IP调 queryIpLocation(arg0=ip)                       → IP归属地
 6. queryUserTransactions(arg0=uid)                            → 用户交易记录 [开发中，见下方说明]
@@ -120,7 +120,7 @@ L0 阻断时脚本返回非零退出码（exit code 1），模型收到后应直
 将MCP返回的原始数据组装为JSON，运行脚本：
 
 ```bash
-python scripts/user_profiling.py --input raw_data.json --output profile.json
+python3 scripts/user_profiling.py --input raw_data.json --output profile.json
 ```
 
 脚本会自动计算：
@@ -187,7 +187,7 @@ python scripts/user_profiling.py --input raw_data.json --output profile.json
 将 A2 输出的画像传入规则匹配脚本：
 
 ```bash
-python scripts/rule_matching.py --profile profile.json --output-fraud fraud.json --output-aml aml.json
+python3 scripts/rule_matching.py --profile profile.json --output-fraud fraud.json --output-aml aml.json
 ```
 
 脚本自动完成：
@@ -241,7 +241,7 @@ python scripts/rule_matching.py --profile profile.json --output-fraud fraud.json
 
 执行命令：
 ```bash
-python scripts/risk_scoring.py --profile profile.json --fraud fraud.json --aml aml.json --output score.json
+python3 scripts/risk_scoring.py --profile profile.json --fraud fraud.json --aml aml.json --output score.json
 ```
 
 **注意**：如果脚本返回 exit code 1（L0 数据缺失拒绝评分），不可忽略继续。应直接向用户报告数据问题。
@@ -352,12 +352,12 @@ MCP服务: user-snowball-crm
 
 3. queryLoginLogList
    参数: arg0 (integer) — 用户uid
-         arg1 (integer) — 查询最近N天的日志，默认7天，最大90天（推荐传90）
-         arg2 (integer) — 返回条数限制，默认20条，最大100条（推荐传100）
+         arg1 (integer) — 查询最近N天的日志，默认7天，最大365天（推荐传365）
+         arg2 (integer) — 返回条数限制，默认20条，最大150条（推荐传150）
    返回数组: [{loginTime(ms), ipAddress, grantType, deviceId,
               deviceType, clientId, clientVersion, flavor}]
    注意: ipAddress 可能脱敏显示为"***"，需跳过
-   注意: 100条上限可能不完整，需在输出中标注
+   注意: 150条上限可能不完整，需在输出中标注
 
 4. queryIpLocation
    参数: arg0 (string) — IP地址，如 "8.8.8.8"
@@ -386,15 +386,15 @@ MCP服务: user-snowball-crm
 
 1. 先调 queryUserInfoByUid(arg0=uid) → 获取基本信息和注册IP
 2. 调 queryLoginDeviceList(arg0=uid, arg1="last_360") → 设备类型分布
-3. 调 queryLoginLogList(arg0=uid, arg1=90, arg2=100) → 登录日志（拉满90天100条）
+3. 调 queryLoginLogList(arg0=uid, arg1=365, arg2=150) → 登录日志（拉满365天150条）
 4. 从登录日志提取不重复IP（排除脱敏IP"***"）+ 注册IP(createdIp)
 5. 对每个不重复IP调 queryIpLocation(arg0=ip) → 归属地
 
 ### 参数选择理由
 
 - **设备 last_360**：一年的历史能发现"从来没出现过的新设备"，提升新设备异常检测灵敏度
-- **登录 90天 100条**：拉满给偏离检测足够的历史窗口（需≥14天才能用自我基线）
-- **100条上限处理**：如果返回刚好100条，标注"数据可能不完整，统计为下限估计"
+- **登录 365天 150条**：拉满给偏离检测足够的历史窗口（需≥14天才能用自我基线）
+- **150条上限处理**：如果返回刚好150条，标注"数据可能不完整，统计为下限估计"
 
 ### 数据不可用时的处理
 
