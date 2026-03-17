@@ -1,0 +1,23 @@
+{
+  "skill_name": "fund-risk-control",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "帮我查一下 UID 12345678 这个用户是否有风险，最近有投诉说这个账号可能被盗",
+      "expected_output": "工作流A：调用4个MCP接口采集数据，生成用户画像，执行反欺诈+反洗钱分析，输出完整风控报告JSON。应重点关注账号安全相关规则（FRD-001/002/003），报告中evidence_chain应有具体数据支撑。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "这几个UID是我们最近标记的欺诈用户：111, 222, 333, 444, 555。帮我分析一下他们的共同特征，看看能不能总结出新的规则",
+      "expected_output": "工作流B：批量采集5个UID的数据，执行user_profiling.py批量模式统计分析，LLM归纳特征模式，输出FeatureExtraction格式的JSON，包含findings和recommended_rule_additions。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用户 UID 99887766，刚注册3天就买了80万的基金，而且每次都是4.9万分开买的，帮我评估一下洗钱风险",
+      "expected_output": "工作流A：应重点命中AML-001(大额)、AML-003(拆分规避)、FRD-009(新注册大额)等规则。risk_score应≥61(高风险)，action_recommendation应建议限制交易+人工审查+提交可疑交易报告。",
+      "files": []
+    }
+  ]
+}

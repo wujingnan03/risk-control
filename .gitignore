@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE / OS
+.DS_Store
+.idea/
+*.swp
+*.swo
+
+# 本地测试数据（可选，不提交到仓库）
+raw_data.json
+profile.json
+fraud.json
+aml.json
+score.json
+*.log
