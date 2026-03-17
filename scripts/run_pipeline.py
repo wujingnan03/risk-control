@@ -33,7 +33,7 @@ def run_pipeline(raw_data):
     内存流水线主函数。
     
     输入：raw_data dict（来自 MCP 采集的原始数据）
-    返回：(score_result, fraud_result, aml_result, profile)
+    返回：(score_result, fraud_result, aml_result, profile, exit_code)
     """
     # A2: 用户画像
     profile = build_profile(raw_data)
