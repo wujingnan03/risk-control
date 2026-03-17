@@ -23,16 +23,14 @@
 MCP 数据采集
     │
     ▼
-scripts/user_profiling.py    → profile.json
-（画像 + 行为偏离检测）
+scripts/run_pipeline.py（推荐，内存模式，无中间文件）
+  内部依次调用：
+  ├─ user_profiling  → profile（内存）
+  ├─ rule_matching   → fraud + aml（内存）
+  └─ risk_scoring    → score（内存）
     │
     ▼
-scripts/rule_matching.py     → fraud.json + aml.json
-（确定性规则匹配，含交叉验证 + severity 调整）
-    │
-    ▼
-scripts/risk_scoring.py      → score.json
-（专家评分卡：分箱打分 + 偏离度乘数 + 交叉项乘数）
+直接输出风险结论（文本摘要或完整 JSON）
     │
     ▼
 LLM 组装自然语言报告（FinalReport）
@@ -50,6 +48,7 @@ risk_control/
 ├── fund-risk-control.skill     # Cursor skill 打包文件（旧版，供参考）
 │
 ├── scripts/                    # Python 执行脚本
+│   ├── run_pipeline.py         # ★ 一体化流水线（推荐入口，无中间文件）
 │   ├── user_profiling.py       # 步骤 A2：用户画像 + 行为偏离检测
 │   ├── rule_matching.py        # 步骤 A3+A4：确定性规则匹配（反欺诈 + 反洗钱）
 │   ├── risk_scoring.py         # 步骤 A5：专家评分卡
@@ -99,6 +98,18 @@ risk_control/
 ---
 
 ## 脚本执行顺序
+
+### 推荐：一体化流水线（无中间文件）
+
+```bash
+# 将 MCP 采集数据组装为 raw_data.json 后，一条命令直出结论
+python3 scripts/run_pipeline.py --input raw_data.json
+
+# 需要机器可读完整 JSON 时（含 score_breakdown / fraud / aml）
+python3 scripts/run_pipeline.py --input raw_data.json --json
+```
+
+### 分步调试模式
 
 ```bash
 # Step 1: 准备原始数据

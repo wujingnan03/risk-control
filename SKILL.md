@@ -113,11 +113,25 @@ L0 阻断时脚本返回非零退出码（exit code 1），模型收到后应直
 - 用户直接粘贴了数据 → 解析用户提供的数据，按相同流程分析（仍需满足 L0 最低要求）
 - 绝不因数据缺失而编造数据填充
 
-### A2. 用户行为画像（含偏离检测）
+### A2 ~ A5. 一体化流水线（推荐）
 
-读取 `references/output_schema.md` 中的 UserProfile 结构。
+将MCP返回的原始数据组装为JSON后，**一条命令完成全部分析，不产生任何中间文件**：
 
-将MCP返回的原始数据组装为JSON，运行脚本：
+```bash
+python3 scripts/run_pipeline.py --input raw_data.json
+```
+
+输出人类可读的风险结论摘要。如需机器可读的完整 JSON（含 score_breakdown / fraud / aml）：
+
+```bash
+python3 scripts/run_pipeline.py --input raw_data.json --json
+```
+
+---
+
+### （分步调试模式）A2. 用户行为画像（含偏离检测）
+
+仅在需要逐步排查时，才分步运行各脚本。正常分析请直接使用上方流水线命令。
 
 ```bash
 python3 scripts/user_profiling.py --input raw_data.json --output profile.json
@@ -180,11 +194,9 @@ python3 scripts/user_profiling.py --input raw_data.json --output profile.json
 
 模型在脚本输出基础上，补充 `behavior_summary` 字段（自然语言总结），此总结必须完全基于脚本输出的数据点，不得添加脚本未检测到的信息。
 
-### A3 + A4. 规则匹配（反欺诈 + 反洗钱）
+### （分步调试模式）A3 + A4. 规则匹配（反欺诈 + 反洗钱）
 
 **由 Python 脚本确定性执行，模型不参与规则判定。**
-
-将 A2 输出的画像传入规则匹配脚本：
 
 ```bash
 python3 scripts/rule_matching.py --profile profile.json --output-fraud fraud.json --output-aml aml.json
@@ -210,7 +222,7 @@ python3 scripts/rule_matching.py --profile profile.json --output-fraud fraud.jso
 
 输出格式遵循 `references/output_schema.md` 中的 FraudAnalysis / AMLAnalysis 结构。
 
-### A5. 综合评分与总结
+### （分步调试模式）A5. 综合评分与总结
 
 #### 评分模型：专家评分卡（Expert Scorecard v2）
 
@@ -442,10 +454,11 @@ MCP服务: user-snowball-crm
 | references/anti_fraud_rules.md | 反欺诈规则库（11条启用+1条禁用） | 了解规则定义时参考 |
 | references/anti_money_laundering.md | 反洗钱规则库（8条启用+4条禁用） | 了解规则定义时参考 |
 | references/business_context.md | 雪球基金业务知识+正常用户基线 | 需要理解业务上下文时读取 |
-| scripts/user_profiling.py | 用户画像+偏离检测计算 | A2执行 |
-| scripts/rule_matching.py | 确定性规则匹配（反欺诈+反洗钱） | A3+A4执行 |
-| scripts/risk_scoring.py | 风险评分计算 | A5执行 |
-| scripts/validate_output.py | 输出格式校验 | 最终输出后执行 |
+| scripts/run_pipeline.py | **一体化流水线**（内存模式，无中间文件） | **推荐：A2~A5一次执行** |
+| scripts/user_profiling.py | 用户画像+偏离检测计算 | 分步调试时A2单独执行 |
+| scripts/rule_matching.py | 确定性规则匹配（反欺诈+反洗钱） | 分步调试时A3+A4单独执行 |
+| scripts/risk_scoring.py | 风险评分计算 | 分步调试时A5单独执行 |
+| scripts/validate_output.py | 输出格式校验 | 分步调试时最终输出后执行 |
 
 ---
 

@@ -495,32 +495,19 @@ def build_action_detail(risk_level, fraud_analysis, aml_analysis):
 # 第六部分：主流程
 # ================================================================
 
-def main():
-    parser = argparse.ArgumentParser(description="风险评分计算（专家评分卡模型）")
-    parser.add_argument("--profile", required=True, help="用户画像 JSON 文件")
-    parser.add_argument("--fraud", required=False, default=None, help="反欺诈分析 JSON 文件")
-    parser.add_argument("--aml", required=False, default=None, help="反洗钱分析 JSON 文件")
-    parser.add_argument("--output", required=True, help="输出 JSON 文件")
-    args = parser.parse_args()
-
-    with open(args.profile, "r", encoding="utf-8") as f:
-        profile = json.load(f)
-
-    fraud_analysis = None
-    if args.fraud:
-        with open(args.fraud, "r", encoding="utf-8") as f:
-            fraud_analysis = json.load(f)
-
-    aml_analysis = None
-    if args.aml:
-        with open(args.aml, "r", encoding="utf-8") as f:
-            aml_analysis = json.load(f)
-
+def compute_score(profile, fraud_analysis=None, aml_analysis=None):
+    """
+    核心评分函数（纯内存计算，不依赖文件 I/O）。
+    
+    可直接被 run_pipeline.py 等上层脚本调用，也可通过 main() 的 CLI 调用。
+    
+    返回：(result_dict, exit_code)
+      exit_code 0 = 成功，1 = L0 数据缺失拒绝评分
+    """
     # ---- Step 0: 强数据验证 ----
     can_score, data_level, missing_details = validate_data_completeness(profile)
 
     if not can_score:
-        # L0 硬阻断：拒绝评分
         result = {
             "risk_score": None,
             "risk_level": "拒绝评分",
@@ -541,19 +528,15 @@ def main():
             "scoring_version": "v2.0-expert-scorecard",
             "scoring_model": "REJECTED",
         }
-        with open(args.output, "w", encoding="utf-8") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-        print(f"❌ 拒绝评分: {missing_details}")
-        return 1  # 非零退出码，表明评分失败
+        return result, 1
 
     # ---- Step 1: 各维度分箱计分 ----
     tx_available = profile.get("transaction_profile", {}).get("available", False)
-    dimension_scores = []   # [(dim_name, score, max_possible)]
-    dimension_details = {}  # {dim_name: {score, max, variables}}
+    dimension_scores = []
+    dimension_details = {}
     degraded_dimensions = []
 
     for dim_name, dim_config in SCORECARD.items():
-        # 交易维度不可用时跳过
         if dim_config.get("requires_tx") and not tx_available:
             degraded_dimensions.append(dim_name)
             dimension_details[dim_name] = {
@@ -563,7 +546,6 @@ def main():
             }
             continue
 
-        # 设备/IP维度数据不可用时跳过
         if dim_name == "device" and profile.get("device_profile", {}).get("total_unique_devices", 0) == 0:
             degraded_dimensions.append(dim_name)
             dimension_details[dim_name] = {
@@ -590,7 +572,6 @@ def main():
             "variables": details,
         }
 
-    # 维度基础分求和
     base_score = sum(s for _, s, _ in dimension_scores)
     max_possible_base = sum(m for _, _, m in dimension_scores)
 
@@ -606,22 +587,18 @@ def main():
     cross_multiplier, cross_details = compute_cross_term_multiplier(dimension_scores)
 
     # ---- Step 5: 综合计算 ----
-    # 公式：(维度基础分 + 规则命中分) × 偏离度乘数 × 交叉项乘数 → 归一化到 0-100
     raw_combined = base_score + rule_score
     after_deviation = raw_combined * deviation_multiplier
     after_cross = after_deviation * cross_multiplier
 
-    # 归一化：理论最大分 = 所有维度满分(75) + 规则满分(假设~60) = ~135，再乘以最大乘数
-    # 用动态归一化：基于实际可用维度的最大分
-    theoretical_max = max_possible_base + 60  # 60 = 规则命中的合理上限估计
-    theoretical_max_with_multipliers = theoretical_max * 1.35 * 1.45  # 最大乘数
+    theoretical_max = max_possible_base + 60
+    theoretical_max_with_multipliers = theoretical_max * 1.35 * 1.45
 
     if theoretical_max_with_multipliers > 0:
         normalized_score = min(round(after_cross / theoretical_max_with_multipliers * 100), 100)
     else:
         normalized_score = 0
 
-    # 保底：如果有任何高严重度规则命中，最低分不低于 30
     high_rule_count = sum(1 for d in fraud_details + aml_details if isinstance(d, dict) and d.get("severity") in ("高", "high"))
     if high_rule_count >= 1 and normalized_score < 30:
         normalized_score = 30
@@ -630,50 +607,71 @@ def main():
     risk_level = determine_risk_level(normalized_score)
     action_detail = build_action_detail(risk_level, fraud_analysis, aml_analysis)
 
-    # ---- 组装输出 ----
     result = {
         "risk_score": normalized_score,
         "risk_level": risk_level,
         "data_validation_level": data_level,
         "degraded_dimensions": degraded_dimensions,
         "missing_data": missing_details if missing_details else None,
-
         "score_breakdown": {
             "model": "expert_scorecard_v2",
             "formula": "(维度基础分 + 规则命中分) × 偏离度乘数 × 交叉项乘数 → 归一化0-100",
-
             "dimension_base_score": base_score,
             "dimension_max_possible": max_possible_base,
             "dimension_details": dimension_details,
-
             "rule_score": rule_score,
             "fraud_rule_score": fraud_score,
             "fraud_rule_details": fraud_details,
             "aml_rule_score": aml_score,
             "aml_rule_details": aml_details,
-
             "deviation_multiplier": deviation_details,
             "cross_term_multiplier": cross_details,
-
             "raw_combined": round(raw_combined, 2),
             "after_deviation": round(after_deviation, 2),
             "after_cross": round(after_cross, 2),
             "normalized_score": normalized_score,
             "floor_applied": high_rule_count >= 1 and normalized_score == 30,
         },
-
         "action_detail": action_detail,
         "scoring_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "scoring_version": "v2.0-expert-scorecard",
     }
+    return result, 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="风险评分计算（专家评分卡模型）")
+    parser.add_argument("--profile", required=True, help="用户画像 JSON 文件")
+    parser.add_argument("--fraud", required=False, default=None, help="反欺诈分析 JSON 文件")
+    parser.add_argument("--aml", required=False, default=None, help="反洗钱分析 JSON 文件")
+    parser.add_argument("--output", required=True, help="输出 JSON 文件")
+    args = parser.parse_args()
+
+    with open(args.profile, "r", encoding="utf-8") as f:
+        profile = json.load(f)
+
+    fraud_analysis = None
+    if args.fraud:
+        with open(args.fraud, "r", encoding="utf-8") as f:
+            fraud_analysis = json.load(f)
+
+    aml_analysis = None
+    if args.aml:
+        with open(args.aml, "r", encoding="utf-8") as f:
+            aml_analysis = json.load(f)
+
+    result, exit_code = compute_score(profile, fraud_analysis, aml_analysis)
 
     with open(args.output, "w", encoding="utf-8") as f:
         json.dump(result, f, ensure_ascii=False, indent=2)
 
-    print(f"评分完成: {normalized_score} ({risk_level}) [模型: expert_scorecard_v2]")
-    print(f"数据验证: {data_level}, 降级维度: {degraded_dimensions or '无'}")
-    print(f"输出: {args.output}")
-    return 0
+    if exit_code != 0:
+        print(f"❌ 拒绝评分: {result.get('missing_data')}")
+    else:
+        print(f"评分完成: {result['risk_score']} ({result['risk_level']}) [模型: expert_scorecard_v2]")
+        print(f"数据验证: {result['data_validation_level']}, 降级维度: {result['degraded_dimensions'] or '无'}")
+        print(f"输出: {args.output}")
+    return exit_code
 
 
 if __name__ == "__main__":
