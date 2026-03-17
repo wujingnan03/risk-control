@@ -23,15 +23,15 @@
 MCP 数据采集
     │
     ▼
-user_profiling.py    → profile.json
+scripts/user_profiling.py    → profile.json
 （画像 + 行为偏离检测）
     │
     ▼
-rule_matching.py     → fraud.json + aml.json
+scripts/rule_matching.py     → fraud.json + aml.json
 （确定性规则匹配，含交叉验证 + severity 调整）
     │
     ▼
-risk_scoring.py      → score.json
+scripts/risk_scoring.py      → score.json
 （专家评分卡：分箱打分 + 偏离度乘数 + 交叉项乘数）
     │
     ▼
@@ -46,18 +46,20 @@ LLM 组装自然语言报告（FinalReport）
 risk_control/
 ├── SKILL.md                    # Skill 主文件（Agent 读取此文件）
 ├── README.md                   # 本文件
-│
-├── user_profiling.py           # 步骤 A2：用户画像 + 行为偏离检测
-├── rule_matching.py            # 步骤 A3+A4：确定性规则匹配（反欺诈 + 反洗钱）
-├── risk_scoring.py             # 步骤 A5：专家评分卡
-├── validate_output.py          # 输出格式校验
-│
-├── anti_fraud_rules.md         # 反欺诈规则库（12 条，11 条启用，1 条禁用）
-├── anti_money_laundering.md    # 反洗钱规则库（12 条，8 条启用，4 条禁用）
-├── output_schema.md            # 所有输出 JSON 的结构定义
-├── business_context.md         # 业务背景与正常用户基线
 ├── evals.json                  # 测试用例
-└── fund-risk-control.skill     # Cursor skill 打包文件（旧版，供参考）
+├── fund-risk-control.skill     # Cursor skill 打包文件（旧版，供参考）
+│
+├── scripts/                    # Python 执行脚本
+│   ├── user_profiling.py       # 步骤 A2：用户画像 + 行为偏离检测
+│   ├── rule_matching.py        # 步骤 A3+A4：确定性规则匹配（反欺诈 + 反洗钱）
+│   ├── risk_scoring.py         # 步骤 A5：专家评分卡
+│   └── validate_output.py      # 输出格式校验
+│
+└── references/                 # 参考文档
+    ├── anti_fraud_rules.md     # 反欺诈规则库（12 条，11 条启用，1 条禁用）
+    ├── anti_money_laundering.md# 反洗钱规则库（12 条，8 条启用，4 条禁用）
+    ├── output_schema.md        # 所有输出 JSON 的结构定义
+    └── business_context.md     # 业务背景与正常用户基线
 ```
 
 ---
@@ -103,25 +105,25 @@ risk_control/
 # 将 MCP 采集到的数据组装为 raw_data.json
 
 # Step 2: 生成用户画像（含行为偏离检测）
-python3 user_profiling.py --input raw_data.json --output profile.json
+python3 scripts/user_profiling.py --input raw_data.json --output profile.json
 
 # Step 3: 规则匹配（确定性，A3+A4）
-python3 rule_matching.py \
+python3 scripts/rule_matching.py \
   --profile profile.json \
   --output-fraud fraud.json \
   --output-aml aml.json
 
 # Step 4: 风险评分（A5）
-python3 risk_scoring.py \
+python3 scripts/risk_scoring.py \
   --profile profile.json \
   --fraud fraud.json \
   --aml aml.json \
   --output score.json
 
 # Step 5: 输出格式校验（可选）
-python3 validate_output.py --input fraud.json --type fraud
-python3 validate_output.py --input aml.json --type aml
-python3 validate_output.py --input score.json --type final_report
+python3 scripts/validate_output.py --input fraud.json --type fraud
+python3 scripts/validate_output.py --input aml.json --type aml
+python3 scripts/validate_output.py --input score.json --type final_report
 ```
 
 ---
