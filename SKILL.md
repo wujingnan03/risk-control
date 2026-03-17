@@ -446,3 +446,80 @@ MCP服务: user-snowball-crm
 | scripts/rule_matching.py | 确定性规则匹配（反欺诈+反洗钱） | A3+A4执行 |
 | scripts/risk_scoring.py | 风险评分计算 | A5执行 |
 | scripts/validate_output.py | 输出格式校验 | 最终输出后执行 |
+
+---
+
+## 移植到其他 Agent
+
+本 Skill 可以运行在任何支持 MCP 调用和 shell 命令执行的 Agent 环境中。Python 脚本**零外部依赖**，仅使用标准库。
+
+### 移植步骤
+
+**第 1 步：复制文件**
+
+将整个 `risk_control/` 目录复制到目标 Agent 的 skill 目录，或直接在新工作区中引用。
+
+**第 2 步：替换 MCP 服务名**
+
+将 SKILL.md 和脚本中所有 `user-snowball-crm` 替换为目标环境的实际服务名。
+
+**第 3 步：确认 MCP 工具映射**
+
+目标环境需提供以下等效工具（函数签名可不同，但返回字段须一致）：
+
+| 本 Skill 使用的工具名 | 返回的关键字段 | 用途 |
+|----------------------|--------------|------|
+| `queryUserInfoByUid(arg0=uid)` | uid, status, risk, regDate, createdIp, cerType 等 | 用户基本信息 |
+| `queryLoginLogList(arg0=uid, arg1=90, arg2=100)` | loginTime(ms), ipAddress, deviceId, grantType 等 | 登录日志 |
+| `queryLoginDeviceList(arg0=uid, arg1="last_360")` | device, platform, client, version | 设备列表 |
+| `queryIpLocation(arg0=ip)` | info: [国家, 省份, 城市, ?, 运营商] | IP 归属地 |
+
+**第 4 步：确认 Python 环境**
+
+```bash
+python3 --version  # 需要 3.6+
+```
+
+所有脚本仅依赖标准库：`json`, `sys`, `argparse`, `datetime`, `collections`, `statistics`。
+
+**第 5 步：更新 SKILL.md 中的脚本路径**
+
+脚本路径使用相对路径（`python user_profiling.py`）时无需修改。若使用绝对路径，替换为实际部署路径。
+
+### 快速验证
+
+移植后可用测试 UID 跑一遍完整流程验证：
+
+```bash
+# 1. 准备测试数据（替换为真实 MCP 返回数据）
+cat > /tmp/test_raw.json << 'EOF'
+{
+  "user_info": {"uid": 123, "status": "0", "statusDesc": "正常用户", "risk": 3,
+    "riskDesc": "平衡型", "cerType": "0", "regDate": "20220101",
+    "createdAt": 1640995200000, "isOpenTrade": true, "createdIp": "1.2.3.4"},
+  "login_logs": [
+    {"loginTime": 1700000000000, "ipAddress": "1.2.3.4",
+     "grantType": "refresh_token", "deviceId": "TEST-DEVICE-001"}
+  ],
+  "devices": [{"device": "iPhone", "platform": "IOS", "client": "Fund", "version": "7.0"}],
+  "ip_locations": {"1.2.3.4": ["中国", "北京", "北京", "", "电信"]}
+}
+EOF
+
+# 2. 执行流水线
+python3 user_profiling.py --input /tmp/test_raw.json --output /tmp/profile.json
+python3 rule_matching.py --profile /tmp/profile.json --output-fraud /tmp/fraud.json --output-aml /tmp/aml.json
+python3 risk_scoring.py --profile /tmp/profile.json --fraud /tmp/fraud.json --aml /tmp/aml.json --output /tmp/score.json
+
+# 3. 检查输出
+cat /tmp/score.json | python3 -m json.tool | head -20
+```
+
+### 已知限制（影响可移植性）
+
+| 限制 | 说明 | 解决方案 |
+|------|------|----------|
+| 交易数据 | `queryUserTransactions` 尚在开发中，AML-001~005 规则归入 data_gaps | 接口上线后更新 `rule_matching.py` 中的 `match_aml_00x` 函数 |
+| 跨账户关联 | AML-007/009 需要多 UID 比对，单 UID 模式下受限 | 在批量模式下已通过 `_find_shared_devices` 支持，单用户模式归 data_gaps |
+| IP 信誉库 | FRD-008 需要 IP 类型判断（家庭/数据中心/VPN），已禁用 | 接入 IP2Location 或 MaxMind 数据库后可重新启用 |
+| 外部身份核验 | AML-006/007/008 需要公安系统或收入数据，已禁用 | 接入相应数据接口后重新启用对应规则 |
