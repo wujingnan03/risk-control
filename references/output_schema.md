@@ -66,7 +66,7 @@
     "last_login": "string",
     "max_gap_days": "int, 最大登录间隔",
     "grant_type_distribution": {"refresh_token": 80, "password": 5},
-    "data_note": "string, 如'已达接口返回上限(100条)'"
+    "data_note": "string, 如'已达接口返回上限(100条)'或模式B时'已达上限(150条)'"
   },
 
   "ip_profile": {
@@ -220,7 +220,7 @@
   "data_quality": {
     "user_info": "完整 | 部分缺失 | 无数据",
     "device_list": "完整 | 无数据",
-    "login_logs": "完整 | 已达上限(100条) | 无数据",
+    "login_logs": "完整 | 已达上限(100条/模式B为150条) | 无数据",
     "ip_locations": "已解析X个/共Y个IP",
     "transaction_data": "不可用(MCP无接口)",
     "overall": "完整 | 部分缺失 | 数据严重不足"

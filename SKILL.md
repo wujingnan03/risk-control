@@ -49,7 +49,8 @@ description: >
 ```
 1. queryUserInfoByUid(arg0=uid)                              → 用户基本信息+注册IP
 2. queryLoginDeviceList(arg0=uid, arg1="last_360")           → 设备列表（一年历史）
-3. queryLoginLogList(arg0=uid, arg1=365, arg2=150)           → 登录日志（365天，上限150条）
+3. queryLoginLogList(arg0=uid, arg1=90, arg2=100)            → 登录日志（默认90天，上限100条）
+   ⚠ 模式B 或 初次评分为高风险/极高风险 时，改用 arg1=365, arg2=150 补查
 4. 提取登录日志中不重复IP + 注册IP(createdIp)
 5. 对每个IP调 queryIpLocation(arg0=ip)                       → IP归属地
 6. queryUserTransactions(arg0=uid)                            → 用户交易记录 [开发中，见下方说明]
@@ -303,7 +304,7 @@ python3 scripts/risk_scoring.py --profile profile.json --fraud fraud.json --aml 
 
 ### 流程
 
-1. **批量数据采集**：对每个UID执行模式A的A1步骤
+1. **批量数据采集**：对每个UID执行模式A的A1步骤（模式B统一使用 `arg1=365, arg2=150` 拉取完整历史）
 2. **逐个画像**：对每个UID执行模式A的A2步骤（批量模式：`--batch`）
 3. **交叉比对**（Python计算）：
    - 统计共性特征（如：80%的样本使用≥3台设备）
@@ -364,12 +365,14 @@ MCP服务: user-snowball-crm
 
 3. queryLoginLogList
    参数: arg0 (integer) — 用户uid
-         arg1 (integer) — 查询最近N天的日志，默认7天，最大365天（推荐传365）
-         arg2 (integer) — 返回条数限制，默认20条，最大150条（推荐传150）
+         arg1 (integer) — 查询最近N天的日志，默认7天，最大365天
+                          模式A推荐传90，模式B/高风险推荐传365
+         arg2 (integer) — 返回条数限制，默认20条，最大150条
+                          模式A推荐传100，模式B/高风险推荐传150
    返回数组: [{loginTime(ms), ipAddress, grantType, deviceId,
               deviceType, clientId, clientVersion, flavor}]
    注意: ipAddress 可能脱敏显示为"***"，需跳过
-   注意: 150条上限可能不完整，需在输出中标注
+   注意: 达到上限（模式A=100条，模式B=150条）时需在输出中标注"数据可能不完整"
 
 4. queryIpLocation
    参数: arg0 (string) — IP地址，如 "8.8.8.8"
@@ -398,15 +401,16 @@ MCP服务: user-snowball-crm
 
 1. 先调 queryUserInfoByUid(arg0=uid) → 获取基本信息和注册IP
 2. 调 queryLoginDeviceList(arg0=uid, arg1="last_360") → 设备类型分布
-3. 调 queryLoginLogList(arg0=uid, arg1=365, arg2=150) → 登录日志（拉满365天150条）
+3. 调 queryLoginLogList(arg0=uid, arg1=90, arg2=100) → 登录日志（默认90天100条）
 4. 从登录日志提取不重复IP（排除脱敏IP"***"）+ 注册IP(createdIp)
 5. 对每个不重复IP调 queryIpLocation(arg0=ip) → 归属地
 
 ### 参数选择理由
 
 - **设备 last_360**：一年的历史能发现"从来没出现过的新设备"，提升新设备异常检测灵敏度
-- **登录 365天 150条**：拉满给偏离检测足够的历史窗口（需≥14天才能用自我基线）
-- **150条上限处理**：如果返回刚好150条，标注"数据可能不完整，统计为下限估计"
+- **登录默认 90天 100条**：90天足够覆盖偏离检测基线（需≥14天即可用自我基线），控制数据量
+- **高风险/模式B 升级至 365天 150条**：初次评分为高风险或极高风险时，用365天补查后重新跑流水线；模式B一律365天
+- **上限处理**：如果返回条数刚好等于上限（100或150条），标注"数据可能不完整，统计为下限估计"
 
 ### 数据不可用时的处理
 
@@ -483,7 +487,7 @@ MCP服务: user-snowball-crm
 | 本 Skill 使用的工具名 | 返回的关键字段 | 用途 |
 |----------------------|--------------|------|
 | `queryUserInfoByUid(arg0=uid)` | uid, status, risk, regDate, createdIp, cerType 等 | 用户基本信息 |
-| `queryLoginLogList(arg0=uid, arg1=90, arg2=100)` | loginTime(ms), ipAddress, deviceId, grantType 等 | 登录日志 |
+| `queryLoginLogList(arg0=uid, arg1=90, arg2=100)` | loginTime(ms), ipAddress, deviceId, grantType 等 | 登录日志（模式B/高风险改 arg1=365, arg2=150） |
 | `queryLoginDeviceList(arg0=uid, arg1="last_360")` | device, platform, client, version | 设备列表 |
 | `queryIpLocation(arg0=ip)` | info: [国家, 省份, 城市, ?, 运营商] | IP 归属地 |
 

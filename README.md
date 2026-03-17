@@ -90,7 +90,7 @@ risk_control/
 | 工具名 | 服务名 | 用途 | 关键参数 |
 |--------|--------|------|----------|
 | `queryUserInfoByUid` | `user-snowball-crm` | 用户基本信息（状态/风险等级/注册IP等） | `arg0`: uid (integer) |
-| `queryLoginLogList` | `user-snowball-crm` | 登录日志（时间/IP/设备/授权类型） | `arg0`: uid, `arg1`: 天数(最大90), `arg2`: 条数(最大100) |
+| `queryLoginLogList` | `user-snowball-crm` | 登录日志（时间/IP/设备/授权类型） | `arg0`: uid, `arg1`: 天数(默认90, 高风险/模式B用365, 最大365), `arg2`: 条数(默认100, 高风险/模式B用150, 最大150) |
 | `queryLoginDeviceList` | `user-snowball-crm` | 设备列表（设备/平台/客户端/版本） | `arg0`: uid, `arg1`: "last_360" |
 | `queryIpLocation` | `user-snowball-crm` | IP 归属地（国家/省份/城市/运营商） | `arg0`: IP 地址字符串 |
 | `queryUserTransactions` | `user-snowball-crm` | 交易记录（开发中，暂不可用） | `arg0`: uid |
